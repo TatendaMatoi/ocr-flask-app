@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: ocr-flask-app
+    env: python
+    buildCommand: "./build.sh"
+    startCommand: "python app.py"
+    plan: free
+    autoDeploy: true
