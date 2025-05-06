@@ -23,10 +23,15 @@ def ocr_space_file(filepath):
             files={'file': f},
             data={'apikey': OCR_SPACE_API_KEY, 'language': 'eng'},
         )
-    result = response.json()
-    if result.get('IsErroredOnProcessing'):
-        return 'OCR Error: ' + result.get('ErrorMessage', ['Unknown error'])[0]
-    return result['ParsedResults'][0]['ParsedText']
+    try:
+        result = response.json()
+        if result.get('IsErroredOnProcessing'):
+            error_msg = result.get('ErrorMessage', ['Unknown error'])[0]
+            return {'error': f'OCR Error: {error_msg}'}
+        return {'text': result['ParsedResults'][0]['ParsedText']}
+    except Exception as e:
+        return {'error': f'Failed to parse OCR response: {str(e)}'}
+
 
 @app.route('/')
 def index():
