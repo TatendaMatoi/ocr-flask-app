@@ -1,16 +1,32 @@
-
 import os
-from flask import Flask, render_template, request, send_file
+from flask import Flask, render_template, request, send_file, jsonify
 from werkzeug.utils import secure_filename
+from pdf2image import convert_from_path
 from PIL import Image
-import pytesseract
-from pdf2image import convert_from_path, convert_from_bytes
+import requests
+from io import BytesIO
+
+# Load the API key from environment variable
+OCR_API_KEY = os.getenv("OCR_API_KEY")
 
 UPLOAD_FOLDER = 'uploads'
-
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+
+def ocr_space_request(image_bytes):
+    """Send image bytes to OCR.space API and return the parsed text."""
+    response = requests.post(
+        'https://api.ocr.space/parse/image',
+        files={"filename": image_bytes},
+        data={"apikey": OCR_API_KEY, "language": "eng"},
+    )
+    result = response.json()
+
+    if result.get("IsErroredOnProcessing"):
+        return "Error: " + result.get("ErrorMessage", ["Unknown error"])[0]
+
+    return result["ParsedResults"][0]["ParsedText"]
 
 @app.route('/')
 def index():
@@ -28,12 +44,19 @@ def upload():
         if filename.lower().endswith('.pdf'):
             images = convert_from_path(filepath)
             for image in images:
-                text += pytesseract.image_to_string(image)
+                image_bytes = BytesIO()
+                image.save(image_bytes, format='JPEG')
+                image_bytes.seek(0)
+                text += ocr_space_request(image_bytes)
         else:
             image = Image.open(filepath)
-            text = pytesseract.image_to_string(image)
+            image_bytes = BytesIO()
+            image.save(image_bytes, format='JPEG')
+            image_bytes.seek(0)
+            text = ocr_space_request(image_bytes)
 
-        return {'text': text}
+        return jsonify({'text': text})
+    return jsonify({'error': 'No file uploaded'}), 400
 
 @app.route('/download', methods=['POST'])
 def download():
@@ -45,4 +68,3 @@ def download():
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000)
-
